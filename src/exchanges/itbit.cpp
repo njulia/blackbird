@@ -6,6 +6,7 @@
 
 
 namespace ItBit {
+static const std::string LEGS = "XBTEUR"; //XBTUSD
 
 static RestApi& queryHandle(Parameters &params)
 {
@@ -17,7 +18,8 @@ static RestApi& queryHandle(Parameters &params)
 quote_t getQuote(Parameters &params)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/v1/markets/XBTUSD/ticker") };
+  const std::string url = "/v1/markets/XBTEUR/ticker"; //("/v1/markets/XBTUSD/ticker") };
+  unique_json root { exchange.getRequest(url) };
 
   const char *quote = json_string_value(json_object_get(root.get(), "bid"));
   auto bidValue = quote ? std::stod(quote) : 0.0;

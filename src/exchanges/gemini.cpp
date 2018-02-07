@@ -27,7 +27,7 @@ quote_t getQuote(Parameters &params)
 {
   auto &exchange = queryHandle(params);
   std::string url;
-  url = "/v1/book/BTCUSD";
+  url = "/v1/book/BTCEUR";
   
   unique_json root { exchange.getRequest(url) };
   const char *quote = json_string_value(json_object_get(json_array_get(json_object_get(root.get(), "bids"), 0), "price"));
@@ -55,8 +55,8 @@ double getAvail(Parameters& params, std::string currency) {
   std::string currencyAllCaps;
   if (currency.compare("btc") == 0) {
     currencyAllCaps = "BTC";
-  } else if (currency.compare("usd") == 0) {
-    currencyAllCaps = "USD";
+  } else if (currency.compare("eur") == 0) {
+    currencyAllCaps = "EUR";
   }
   for (size_t i = 0; i < arraySize; i++) {
     std::string tmpCurrency = json_string_value(json_object_get(json_array_get(root.get(), i), "currency"));
@@ -79,7 +79,7 @@ std::string sendLongOrder(Parameters& params, std::string direction, double quan
                   << std::setprecision(6) << quantity << "@$"
                   << std::setprecision(2) << price << "...\n";
   std::ostringstream oss;
-  oss << "\"symbol\":\"BTCUSD\", \"amount\":\"" << quantity << "\", \"price\":\"" << price << "\", \"side\":\"" << direction << "\", \"type\":\"exchange limit\"";
+  oss << "\"symbol\":\"BTCEUR\", \"amount\":\"" << quantity << "\", \"price\":\"" << price << "\", \"side\":\"" << direction << "\", \"type\":\"exchange limit\"";
   std::string options = oss.str();
   unique_json root { authRequest(params, "https://api.gemini.com/v1/order/new", "order/new", options) };
   std::string orderId = json_string_value(json_object_get(root.get(), "order_id"));
@@ -102,7 +102,7 @@ double getActivePos(Parameters& params) {
 double getLimitPrice(Parameters& params, double volume, bool isBid)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/v1/book/btcusd") };
+  unique_json root { exchange.getRequest("/v1/book/btceur") };
   auto bidask = json_object_get(root.get(), isBid ? "bids" : "asks");
   
   // loop on volume

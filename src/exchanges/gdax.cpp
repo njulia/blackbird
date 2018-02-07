@@ -4,6 +4,7 @@
 #include "unique_json.hpp"
 
 namespace GDAX {
+static const std::string LEGS="BTC-EUR";
 
 static RestApi& queryHandle(Parameters &params)
 {
@@ -15,7 +16,8 @@ static RestApi& queryHandle(Parameters &params)
 quote_t getQuote(Parameters &params)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/products/BTC-USD/ticker") };
+  const std::string url = "/products/" + LEGS + "/ticker"; //"/products/BTC-USD/ticker"
+  unique_json root { exchange.getRequest(url) };
 
   const char *bid, *ask;
   int unpack_fail = json_unpack(root.get(), "{s:s, s:s}", "bid", &bid, "ask", &ask);
@@ -31,6 +33,7 @@ quote_t getQuote(Parameters &params)
 double getAvail(Parameters &params, std::string currency)
 {
   // TODO
+  std::cout << "No result returned for GDAX Balance" << std::endl;
   return 0.0;
 }
 

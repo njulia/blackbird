@@ -46,9 +46,9 @@ double getAvail(Parameters& params, std::string currency)
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/userinfo.do", signature, content) };
   double availability = 0.0;
   const char* returnedText;
-  if (currency == "usd")
+  if (currency == "eur")
   {
-    returnedText = json_string_value(json_object_get(json_object_get(json_object_get(json_object_get(root.get(), "info"), "funds"), "free"), "usd"));
+    returnedText = json_string_value(json_object_get(json_object_get(json_object_get(json_object_get(root.get(), "info"), "funds"), "free"), "eur"));
   }
   else if (currency == "btc")
   {
@@ -69,12 +69,12 @@ std::string sendLongOrder(Parameters& params, std::string direction, double quan
 {
   // signature
   std::ostringstream oss;
-  oss << "amount=" << quantity << "&api_key=" << params.okcoinApi << "&price=" << price << "&symbol=btc_usd&type=" << direction << "&secret_key=" << params.okcoinSecret;
+  oss << "amount=" << quantity << "&api_key=" << params.okcoinApi << "&price=" << price << "&symbol=btc_eur&type=" << direction << "&secret_key=" << params.okcoinSecret;
   std::string signature = oss.str();
   oss.clear();
   oss.str("");
   // content
-  oss << "amount=" << quantity << "&api_key=" << params.okcoinApi << "&price=" << price << "&symbol=btc_usd&type=" << direction;
+  oss << "amount=" << quantity << "&api_key=" << params.okcoinApi << "&price=" << price << "&symbol=btc_eur&type=" << direction;
   std::string content = oss.str();
   *params.logFile << "<OKCoin> Trying to send a \"" << direction << "\" limit order: "
                   << std::setprecision(6) << quantity << "@$"
@@ -106,12 +106,12 @@ bool isOrderComplete(Parameters& params, std::string orderId)
 
   // signature
   std::ostringstream oss;
-  oss << "api_key=" << params.okcoinApi << "&order_id=" << orderId << "&symbol=btc_usd" << "&secret_key=" << params.okcoinSecret;
+  oss << "api_key=" << params.okcoinApi << "&order_id=" << orderId << "&symbol=btc_eur" << "&secret_key=" << params.okcoinSecret;
   std::string signature = oss.str();
   oss.clear();
   oss.str("");
   // content
-  oss << "api_key=" << params.okcoinApi << "&order_id=" << orderId << "&symbol=btc_usd";
+  oss << "api_key=" << params.okcoinApi << "&order_id=" << orderId << "&symbol=btc_eur";
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/order_info.do", signature, content) };
   auto status = json_integer_value(json_object_get(json_array_get(json_object_get(root.get(), "orders"), 0), "status"));
@@ -124,7 +124,7 @@ double getActivePos(Parameters& params) { return getAvail(params, "btc"); }
 double getLimitPrice(Parameters& params, double volume, bool isBid)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/api/v1/depth.do?symbol=btc_usd") };
+  unique_json root { exchange.getRequest("/api/v1/depth.do?symbol=btc_eur") };
   auto bidask = json_object_get(root.get(), isBid ? "bids" : "asks");
 
   // loop on volume
@@ -207,11 +207,11 @@ json_t* authRequest(Parameters& params, std::string url, std::string signature, 
 void getBorrowInfo(Parameters& params)
 {
   std::ostringstream oss;
-  oss << "api_key=" << params.okcoinApi << "&symbol=btc_usd&secret_key=" << params.okcoinSecret;
+  oss << "api_key=" << params.okcoinApi << "&symbol=btc_eur&secret_key=" << params.okcoinSecret;
   std::string signature = oss.str();
   oss.clear();
   oss.str("");
-  oss << "api_key=" << params.okcoinApi << "&symbol=btc_usd";
+  oss << "api_key=" << params.okcoinApi << "&symbol=btc_eur";
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/borrows_info.do", signature, content) };
   auto dump = json_dumps(root.get(), 0);
@@ -222,11 +222,11 @@ void getBorrowInfo(Parameters& params)
 int borrowBtc(Parameters& params, double amount)
 {
   std::ostringstream oss;
-  oss << "api_key=" << params.okcoinApi << "&symbol=btc_usd&days=fifteen&amount=" << 1 << "&rate=0.0001&secret_key=" << params.okcoinSecret;
+  oss << "api_key=" << params.okcoinApi << "&symbol=btc_eur&days=fifteen&amount=" << 1 << "&rate=0.0001&secret_key=" << params.okcoinSecret;
   std::string signature = oss.str();
   oss.clear();
   oss.str("");
-  oss << "api_key=" << params.okcoinApi << "&symbol=btc_usd&days=fifteen&amount=" << 1 << "&rate=0.0001";
+  oss << "api_key=" << params.okcoinApi << "&symbol=btc_eur&days=fifteen&amount=" << 1 << "&rate=0.0001";
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/borrow_money.do", signature, content) };
   auto dump = json_dumps(root.get(), 0);

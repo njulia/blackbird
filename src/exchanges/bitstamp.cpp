@@ -17,6 +17,8 @@
 
 namespace Bitstamp {
 
+static const std::string CCY="eur";
+
 static json_t* authRequest(Parameters &, std::string, std::string);
 
 static RestApi& queryHandle(Parameters &params)
@@ -44,7 +46,8 @@ static json_t* checkResponse(std::ostream &logFile, json_t *root)
 quote_t getQuote(Parameters& params)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/api/ticker") };
+  //unique_json root { exchange.getRequest("/api/ticker") };
+  unique_json root { exchange.getRequest("/api/v2/ticker/btceur") };
 
   const char *quote = json_string_value(json_object_get(root.get(), "bid"));
   auto bidValue = quote ? atof(quote) : 0.0;
@@ -72,9 +75,10 @@ double getAvail(Parameters& params, std::string currency)
   {
     returnedText = json_string_value(json_object_get(root.get(), "btc_balance"));
   }
-  else if (currency == "usd")
+  else if (currency == CCY)
   {
-    returnedText = json_string_value(json_object_get(root.get(), "usd_balance"));
+    const std::string quote = CCY + "_balance";
+    returnedText = json_string_value(json_object_get(root.get(), quote.c_str()));
   }
   if (returnedText != NULL)
   {
