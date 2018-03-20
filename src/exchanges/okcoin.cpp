@@ -45,7 +45,7 @@ double getAvail(Parameters& params, std::string currency)
   std::string content(oss.str());
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/userinfo.do", signature, content) };
   double availability = 0.0;
-  const char* returnedText;
+  const char* returnedText="0.0";
   if (currency == "usd")
   {
     returnedText = json_string_value(json_object_get(json_object_get(json_object_get(json_object_get(root.get(), "info"), "funds"), "free"), "usd"));
@@ -56,9 +56,12 @@ double getAvail(Parameters& params, std::string currency)
   }
   else returnedText = "0.0";
 
+  std::cout << "OKCoin : " << returnedText << " " << currency << std::endl; 
+
   if (returnedText != NULL) {
     availability = atof(returnedText);
   } else {
+    std::cout << "<OKCoin> Error with the credentials." << std::endl;
     *params.logFile << "<OKCoin> Error with the credentials." << std::endl;
     availability = 0.0;
   }

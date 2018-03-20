@@ -14,6 +14,16 @@
 #include <iomanip>
 #include <ctime>
 #include <iomanip>
+#include <algorithm>
+#include <chrono>
+
+using std::string;
+using std::cout;
+using std::endl;
+using std::min;
+using std::max;
+using millisecs = std::chrono::milliseconds;
+using std::this_thread::sleep_for;
 
 namespace Bitstamp {
 
@@ -43,16 +53,60 @@ static json_t* checkResponse(std::ostream &logFile, json_t *root)
 
 quote_t getQuote(Parameters& params)
 {
+  
+  // BTC/USD
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/api/ticker") };
-
+  unique_json root { exchange.getRequest("/api/v2/ticker/btcusd") };
   const char *quote = json_string_value(json_object_get(root.get(), "bid"));
-  auto bidValue = quote ? atof(quote) : 0.0;
-
+  auto btcusd_bid = quote ? atof(quote) : 0.0;
   quote = json_string_value(json_object_get(root.get(), "ask"));
-  auto askValue = quote ? atof(quote) : 0.0;
+  auto btcusd_ask = quote ? atof(quote) : 0.0;
+  
+  arbitrage(params);
+  
+/*
+  // ETH/USD
+  unique_json ethusd_root { exchange.getRequest("/api/v2/ticker/ethusd") };
+  quote = json_string_value(json_object_get(ethusd_root.get(), "bid"));
+  auto ethusd_bid = quote ? atof(quote) : 0.0;
+  quote = json_string_value(json_object_get(ethusd_root.get(), "ask"));
+  auto ethusd_ask = quote ? atof(quote) : 0.0;
+  std::cout << "Bitstamp ETHUSD " << ethusd_bid << " : " << ethusd_ask << std::endl;
+  
+  // ETH/BTC
+  unique_json ethbtc_root { exchange.getRequest("/api/v2/ticker/ethbtc") };
+  quote = json_string_value(json_object_get(ethbtc_root.get(), "bid"));
+  auto ethbtc_bid = quote ? atof(quote) : 0.0;
+  quote = json_string_value(json_object_get(ethbtc_root.get(), "ask"));
+  auto ethbtc_ask = quote ? atof(quote) : 0.0;
+  std::cout << "Bitstamp ETHUSD " << ethbtc_bid << " : " << ethbtc_ask << std::endl;
 
-  return std::make_pair(bidValue, askValue);
+  float fees = 0.0;//params.bitstampFees;
+  static float account = 1000.0;
+  float pnl = account / btcusd_ask / ethbtc_ask * ethusd_bid - fees*(btcusd_ask + ethbtc_ask + ethusd_bid) - account;
+  std::cout << "Bitstamp BTC PNL=" << pnl << std::endl;
+  if (pnl > 0.0)
+  {
+    usd_balance = getAvail(params, "usd");
+   
+    
+    account += pnl;
+    std::cout << "Bitstamp buy BTC, PNL=" << pnl << " Account=" << account << std::endl;
+    *params.logFile << "Bitstamp buy BTC, PNL=" << pnl << " Account=" << account << std::endl;
+  }
+  else
+  {
+      pnl = account / ethusd_ask * ethbtc_bid * btcusd_bid - fees*(ethusd_ask + ethbtc_bid +btcusd_bid) - account;
+      std::cout << "Bitstamp ETH PNL=" << pnl << std::endl;
+      if (pnl > 0.0)
+      {
+        account += pnl;
+        std::cout << "Bitstamp buy ETH, PNL=" << pnl << " Account=" << account << std::endl;
+        *params.logFile << "Bitstamp buy ETH, PNL=" << pnl << " Account=" << account << std::endl;
+      }
+  }
+*/
+  return std::make_pair(btcusd_bid, btcusd_ask);
 }
 
 double getAvail(Parameters& params, std::string currency)
@@ -78,10 +132,12 @@ double getAvail(Parameters& params, std::string currency)
   }
   if (returnedText != NULL)
   {
+    std::cout << "Bistamp : " << returnedText << " " << currency << std::endl; 
     availability = atof(returnedText);
   }
   else
   {
+    std::cout<< "<Bitstamp> Error with the credentials." << std::endl;
     *params.logFile << "<Bitstamp> Error with the credentials." << std::endl;
     availability = 0.0;
   }
@@ -92,6 +148,9 @@ double getAvail(Parameters& params, std::string currency)
 std::string sendLongOrder(Parameters& params, std::string direction, double quantity, double price)
 {
   *params.logFile << "<Bitstamp> Trying to send a \"" << direction << "\" limit order: "
+                  << std::setprecision(6) << quantity << "@$"
+                  << std::setprecision(2) << price << "...\n";
+  cout << "<Bitstamp> Trying to send a \"" << direction << "\" limit order: "
                   << std::setprecision(6) << quantity << "@$"
                   << std::setprecision(2) << price << "...\n";
   std::string url = "/api/" + direction + '/';
@@ -105,9 +164,39 @@ std::string sendLongOrder(Parameters& params, std::string direction, double quan
   {
     auto dump = json_dumps(root.get(), 0);
     *params.logFile << "<Bitstamp> Order ID = 0. Message: " << dump << '\n';
+    cout << "<Bitstamp> Order ID = 0. Message: " << dump << '\n';
     free(dump);
   }
   *params.logFile << "<Bitstamp> Done (order ID: " << orderId << ")\n" << std::endl;
+  cout << "<Bitstamp> Done (order ID: " << orderId << ")\n" << std::endl;
+
+  return orderId;
+}
+
+std::string sendLimitOrder(Parameters& params, std::string direction, double quantity, double price, const string& ccy_pair)
+{
+  *params.logFile << "<Bitstamp> Trying to send a \"" << direction << "\" limit order: "
+                  << std::setprecision(6) << quantity << "@$"
+                  << std::setprecision(2) << price << "...\n";
+  cout << "<Bitstamp> Trying to send a \"" << direction << "\" limit order: "
+                  << std::setprecision(6) << quantity << "@$"
+                  << std::setprecision(2) << price << "...\n";
+  std::string url = "/api/v2/" + direction + '/' + ccy_pair + "/";;
+
+  std::ostringstream oss;
+  oss << "amount=" << quantity << "&price=" << std::fixed << std::setprecision(2) << price;
+  std::string options = oss.str();
+  unique_json root { authRequest(params, url, options) };
+  auto orderId = std::to_string(json_integer_value(json_object_get(root.get(), "id")));
+  if (orderId == "0")
+  {
+    auto dump = json_dumps(root.get(), 0);
+    *params.logFile << "<Bitstamp> Order ID = 0. Message: " << dump << '\n';
+    cout << "<Bitstamp> Order ID = 0. Message: " << dump << '\n';
+    free(dump);
+  }
+  *params.logFile << "<Bitstamp> Done (order ID: " << orderId << ")\n" << std::endl;
+  cout << "<Bitstamp> Done (order ID: " << orderId << ")\n" << std::endl;
 
   return orderId;
 }
@@ -170,6 +259,173 @@ json_t* authRequest(Parameters &params, std::string request, std::string options
 
   auto &exchange = queryHandle(params);
   return checkResponse(*params.logFile, exchange.postRequest(request, postParams));
+}
+
+bool get_orderbook(Parameters& params, const string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size)
+{
+  auto &exchange = queryHandle(params);
+  const string& url = "/api/v2/order_book/" + ccy_pair;
+  unique_json root { exchange.getRequest(url) };
+  json_t *bids = json_object_get(root.get(), "bids");
+  json_t *asks = json_object_get(root.get(), "asks");
+  if ( !json_is_array(bids) || !json_is_array(asks) )
+  {
+    cout << "OrderBook Bids or Asks is not array" << endl;
+    return false;
+  }  
+  // Get the top bid and ask in the order book 
+  json_t *bid = json_array_get(bids, 0);
+  json_t *ask = json_array_get(asks, 0);
+  if ( !json_is_array(bid) || !json_is_array(ask) )
+  {
+    cout << "OrderBook top Bid or Ask is not array" << endl;
+    return false;
+  }  
+  const char *bid_price_str = json_string_value(json_array_get(bid, 0));
+  const char *bid_size_str = json_string_value(json_array_get(bid, 1));
+  const char *ask_price_str = json_string_value(json_array_get(ask, 0));
+  const char *ask_size_str = json_string_value(json_array_get(ask, 1));
+
+  bid_price = bid_price_str ? atof(bid_price_str) : 0.0; 
+  bid_size = bid_size_str ? atof(bid_size_str) : 0.0;
+  ask_price = ask_price_str ? atof(ask_price_str) : 0.0;
+  ask_size = ask_size_str ? atof(ask_size_str) : 0.0;
+
+  cout << url  << ": " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << endl;
+  *params.logFile << url  << ": " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << endl;
+  return true;
+
+} 
+
+bool arbitrage(Parameters& params)
+{
+  char ccys[4][3]=[["btcusd", "ethbtc", "ethusd"],
+                   ["btcusd", "xrpbtc", "xrpusd"],
+                   ["btcusd", "ltcbtc", "ltcusd"],
+                   ["btcusd", "bchbtc", "bchusd"]];
+  for (i=0; i< 4; ++i)
+  {
+
+  // BTC/USD
+  string ccy1=ccys[i][0];
+  string ccy2=ccys[i][1];
+  string ccy3=ccys[i][2];
+  cout << "ccy1=" << ccy1 << " ccy2=" << ccy2 << " ccy3=" << ccy3 << endl;
+  *params.logFile << "ccy1=" << ccy1 << " ccy2=" << ccy2 << " ccy3=" << ccy3 << endl;
+
+  double btcusd_bid_price, btcusd_bid_size, btcusd_ask_price, btcusd_ask_size;
+  get_orderbook(params, "btcusd", btcusd_bid_price, btcusd_bid_size, btcusd_ask_price, btcusd_ask_size); 
+  // ETH/BTC
+  double ethbtc_bid_price, ethbtc_bid_size, ethbtc_ask_price, ethbtc_ask_size;
+  //get_orderbook(params, "xrpbtc", ethbtc_bid_price, ethbtc_bid_size, ethbtc_ask_price, ethbtc_ask_size); 
+  get_orderbook(params, "ethbtc", ethbtc_bid_price, ethbtc_bid_size, ethbtc_ask_price, ethbtc_ask_size); 
+  // ETH/USD
+  double ethusd_bid_price, ethusd_bid_size, ethusd_ask_price, ethusd_ask_size;
+  //get_orderbook(params, "xrpusd", ethusd_bid_price, ethusd_bid_size, ethusd_ask_price, ethusd_ask_size); 
+  get_orderbook(params, "ethusd", ethusd_bid_price, ethusd_bid_size, ethusd_ask_price, ethusd_ask_size); 
+
+  float fees = params.bitstampFees;
+  static float account = 100.0;
+  float potential_pnl = account / btcusd_ask_price / ethbtc_ask_price * ethusd_bid_price - 3*fees*account - account;
+  std::cout << "Potential buy BTC/USD PNL=" << potential_pnl << std::endl;
+  // Arbitrage when there is profilt
+  if (potential_pnl > 0.0)
+  {
+    std::cout << "Opportunity: buy BTC PNL=" << potential_pnl << std::endl;
+    *params.logFile << "Opportunity: buy BTC PNL=" << potential_pnl << std::endl;
+    double usd_balance = getAvail(params, "usd");
+    if (usd_balance < account)
+      return false;
+    // Check the maximum fund can be used for arbitrage. Should be less than the top order book, and less than the account balance
+    double buy_power  = min(min(min(btcusd_ask_size*btcusd_ask_price, ethbtc_ask_size*ethbtc_ask_price), ethusd_bid_size*ethusd_bid_price), usd_balance*0.1); //Only use 90% fund 
+    //double buy_size  = min(min(min(btcusd_ask_size, ethbtc_ask_size), ethusd_bid_size), buy_power); 
+   
+    // Buy BTCUSD order
+    double ticksize = 0.01;
+    double btcusd_size = min(buy_power / btcusd_ask_price, btcusd_ask_size); // Mutipled buy a factor (<1) to buy less than the max fund can be used
+    double btcusd_price = min((btcusd_bid_price + btcusd_ask_price)/2 + ticksize, btcusd_ask_price - ticksize);
+    auto btcusd_id = sendLimitOrder(params, "buy", btcusd_size, btcusd_price, "btcusd"); 
+    sleep_for(millisecs(1000));
+    bool is_order_complete = isOrderComplete(params, btcusd_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy BTCUSD " << btcusd_price << " @ " << btcusd_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, btcusd_id);
+    }
+    // Reset the order id
+    btcusd_id ="0";
+    cout << "Buy BTCUSD Done" << endl;
+    *params.logFile << "Buy BTCUSD Done" << endl;
+    
+    // Buy ETHBTC order
+    ticksize = 0.00000001;
+    //double ethbtc_size = min(btcusd_size / ethbtc_ask_price, btcusd_ask_size); // Mutipled buy a factor (<1) to buy less than the max fund can be used
+    //double ethbtc_price = min((ethbtc_bid_price + ethbtc_ask_price)/2 + ticksize, ethbtc_ask_price - ticksize);
+    double ethbtc_size = btcusd_size / ethbtc_ask_price;
+    double ethbtc_price = ethbtc_ask_price;
+    auto ethbtc_id = sendLimitOrder(params, "buy", ethbtc_size, ethbtc_price, "ethbtc"); 
+    //auto ethbtc_id = sendLimitOrder(params, "buy", ethbtc_size, ethbtc_price, "ethbtc"); 
+    sleep_for(millisecs(1000));
+    is_order_complete = isOrderComplete(params, ethbtc_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy ETHBTC " << ethbtc_price << " @ " << ethbtc_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, ethbtc_id);
+    }
+    // Reset the order id
+    ethbtc_id ="0";
+    cout << "Buy ETHBTC Done" << endl;
+    *params.logFile << "Buy ETHBTC Done" << endl;
+
+    // Sell ETHUSD order
+    ticksize = 0.01;
+    //double ethusd_size = min(ethbtc_size, ethusd_bid_size); // Mutipled buy a factor (<1) to buy less than the max fund can be used
+    //double ethusd_price = max((ethusd_bid_price + ethusd_ask_price)/2 - ticksize, ethusd_bid_price + ticksize);
+    double ethusd_size = ethbtc_size;
+    double ethusd_price = ethusd_bid_price;
+    auto ethusd_id = sendLimitOrder(params, "buy", ethusd_size, ethusd_price, "ethusd"); 
+    //auto ethusd_id = sendLimitOrder(params, "buy", ethusd_size, ethusd_price, "ethusd"); 
+    sleep_for(millisecs(1000));
+    is_order_complete = isOrderComplete(params, ethusd_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy ETHUSD " << ethusd_price << " @ " << ethusd_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, ethusd_id);
+    }
+    // Reset the order id
+    ethusd_id ="0";
+    cout << "Buy ETHUSD Done" << endl;
+    *params.logFile << "Buy ETHUSD Done" << endl;
+
+    // Check the pnl of this arbitrage
+    double new_balance = getAvail(params, "usd");
+    double pnl = new_balance - usd_balance;;
+    account += pnl;
+    std::cout << "Bitstamp buy BTC/USD -> buy ETH/BTC -> sell ETH/USD, PNL=" << pnl << " New balance=$" << new_balance << std::endl;
+    *params.logFile << "Bitstamp buy BTC/USD -> buy ETH/BTC -> sell ETH/USD, PNL=" << pnl << " New balance=$" << new_balance << std::endl;
+    return true;
+  }
+  else
+  {
+      double pnl = account / ethusd_ask_price * ethbtc_bid_price * btcusd_bid_price - 3*fees*account - account;
+      std::cout << "Potential buy ETH/USD PNL=" << pnl << std::endl;
+      /*
+      if (pnl > 0.0)
+      {
+        account += pnl;
+        std::cout << "Bitstamp buy ETH/USD, PNL=" << pnl << " Account=" << account << std::endl;
+        *params.logFile << "Bitstamp buy ETH/USD, PNL=" << pnl << " Account=" << account << std::endl;
+      }
+      */
+     return false;
+     
+  }
+
+}// for loop i
+  return false;
 }
 
 }

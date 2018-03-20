@@ -47,6 +47,11 @@ quote_t getQuote(Parameters &params)
 
 double getAvail(Parameters& params, std::string currency) {
   unique_json root { authRequest(params, "/0/private/Balance") };
+  const char * reply = json_string_value(json_object_get(root.get(),""));
+  if (reply == NULL)
+      std::cout << "Kraken response: no error" << std::endl;
+  else
+      std::cout << "Kraken response:" << reply << std::endl;
   json_t *result = json_object_get(root.get(), "result");
   if (json_object_size(result) == 0) {
     return 0.0;
