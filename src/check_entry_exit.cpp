@@ -8,6 +8,14 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <limits>
+
+
+bool equal(double a, double b)
+{
+    double epsilon = std::numeric_limits<double>::epsilon();
+    return ((a-b) > -1.0*epsilon) && ((a-b) <epsilon); 
+}
 
 
 // Not sure to understand what's going on here ;-)
@@ -31,8 +39,9 @@ std::string percToStr(double perc) {
 }
 
 bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& params) {
-  
-  if (!btcShort->getHasShort()) return false;
+  // Only check the arbitrage opportunities when the btcShort exchange support short
+  if (!btcShort->getHasShort()) 
+      return false;
 
   // Gets the prices and computes the spread
   double priceLong = btcLong->getAsk();
@@ -43,6 +52,7 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
     res.spreadIn = (priceShort - priceLong) / priceLong;
   } else {
     res.spreadIn = 0.0;
+    return false;
   }
   int longId = btcLong->getId();
   int shortId = btcShort->getId();
@@ -50,11 +60,24 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
   // We update the max and min spread if necessary
   res.maxSpread[longId][shortId] = std::max(res.spreadIn, res.maxSpread[longId][shortId]);
   res.minSpread[longId][shortId] = std::min(res.spreadIn, res.minSpread[longId][shortId]);
-
+  res.feesLong = btcLong->getFees();
+  res.feesShort = btcShort->getFees();
+  // The spread range between (current spread , min spread record)
+  double spreadRange = res.spreadIn - res.minSpread[longId][shortId];
+  // The max spread range in the record between (max spread record , min spread record)
+  double spreadRangeMax = res.maxSpread[longId][shortId] - res.minSpread[longId][shortId];
+  // The spread threshold to make profit parmas.spreadTarget. 1.2 is used to adjust the entry point, the bigger, the more difficult to entry
+  double spreadThresh = params.spreadTarget * 1.2 + 2.0*(res.feesLong + res.feesShort);
+  
   if (params.verbose) {
     params.logFile->precision(2);
     *params.logFile << "   " << btcLong->getExchName() << "/" << btcShort->getExchName() << ":\t" << percToStr(res.spreadIn);
-    *params.logFile << " [target " << percToStr(params.spreadEntry) << ", min " << percToStr(res.minSpread[longId][shortId]) << ", max " << percToStr(res.maxSpread[longId][shortId]) << "]";
+    *params.logFile << " [target " << percToStr(params.spreadTarget) << ", min " << percToStr(res.minSpread[longId][shortId]) << ", max " << percToStr(res.maxSpread[longId][shortId]) << "]";
+    *params.logFile << " [current_spread_range " << percToStr(spreadRange) << ", spread_threshold " << percToStr(spreadThresh) << ", spread_range_max" << percToStr(spreadRangeMax) <<"]";
+   
+    std::cout << "Compare   " << btcLong->getExchName() << "/" << btcShort->getExchName() << ":\t" << percToStr(res.spreadIn);
+    std::cout << " [target " << percToStr(params.spreadTarget) << ", min " << percToStr(res.minSpread[longId][shortId]) << ", max " << percToStr(res.maxSpread[longId][shortId]) << "]";
+    std::cout << " [current_spread_range " << percToStr(spreadRange) << ", spread_threshold " << percToStr(spreadThresh) << ", spread_range_max" << percToStr(spreadRangeMax) <<"]";
     // The short-term volatility is computed and
     // displayed. No other action with it for
     // the moment.
@@ -62,6 +85,7 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
       if (res.volatility[longId][shortId].size() >= params.volatilityPeriod) {
         auto stdev = compute_sd(begin(res.volatility[longId][shortId]), end(res.volatility[longId][shortId]));
         *params.logFile << "  volat. " << stdev * 100.0 << "%";
+        std::cout << "  volat. " << stdev * 100.0 << "%";
       } else {
         *params.logFile << "  volat. n/a " << res.volatility[longId][shortId].size() << "<" << params.volatilityPeriod << " ";
       }
@@ -69,8 +93,9 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
     // Updates the trailing spread
     // TODO: explain what a trailing spread is.
     // See #12 on GitHub for the moment
-    if (res.trailing[longId][shortId] != -1.0) {
+    if (!equal(res.trailing[longId][shortId], TRAILING_MIN)) {
       *params.logFile << "   trailing " << percToStr(res.trailing[longId][shortId]) << "  " << res.trailingWaitCount[longId][shortId] << "/" << params.trailingCount;
+      std::cout << "   trailing " << percToStr(res.trailing[longId][shortId]) << "  " << res.trailingWaitCount[longId][shortId] << "/" << params.trailingCount;
     }
     // If one of the exchanges (or both) hasn't been implemented,
     // we mention in the log file that this spread is for info only.
@@ -78,6 +103,7 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
       *params.logFile << "   info only";
 
     *params.logFile << std::endl;
+    std::cout << std::endl;
   }
   // We need both exchanges to be implemented,
   // otherwise we return False regardless of
@@ -91,15 +117,16 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
   // because once the spread is *below*
   // SpreadEndtry. Again, see #12 on GitHub for
   // more details.
-  if (res.spreadIn < params.spreadEntry) {
-    res.trailing[longId][shortId] = -1.0;
+  if (res.spreadIn < params.spreadEntry || spreadRange < spreadThresh) {
+    res.trailing[longId][shortId] = TRAILING_MIN;
     res.trailingWaitCount[longId][shortId] = 0;
     return false;
   }
 
   // Updates the trailingSpread with the new value
   double newTrailValue = res.spreadIn - params.trailingLim;
-  if (res.trailing[longId][shortId] == -1.0) {
+  //if (res.trailing[longId][shortId] == -1.0) {
+  if (equal(res.trailing[longId][shortId], TRAILING_MIN)) {
     res.trailing[longId][shortId] = std::max(newTrailValue, params.spreadEntry);
     return false;
   }
@@ -123,8 +150,8 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
   // was found).
   res.idExchLong = longId;
   res.idExchShort = shortId;
-  res.feesLong = btcLong->getFees();
-  res.feesShort = btcShort->getFees();
+  //res.feesLong = btcLong->getFees();
+  //res.feesShort = btcShort->getFees();
   res.exchNameLong = btcLong->getExchName();
   res.exchNameShort = btcShort->getExchName();
   res.priceLongIn = priceLong;
@@ -141,17 +168,23 @@ bool checkExit(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& par
     res.spreadOut = (priceShort - priceLong) / priceLong;
   } else {
     res.spreadOut = 0.0;
+    return false;
   }
   int longId = btcLong->getId();
   int shortId = btcShort->getId();
 
   res.maxSpread[longId][shortId] = std::max(res.spreadOut, res.maxSpread[longId][shortId]);
   res.minSpread[longId][shortId] = std::min(res.spreadOut, res.minSpread[longId][shortId]);
+  double spreadRange = res.spreadOut - res.minSpread[longId][shortId];
 
   if (params.verbose) {
     params.logFile->precision(2);
     *params.logFile << "   " << btcLong->getExchName() << "/" << btcShort->getExchName() << ":\t" << percToStr(res.spreadOut);
     *params.logFile << " [target " << percToStr(res.exitTarget) << ", min " << percToStr(res.minSpread[longId][shortId]) << ", max " << percToStr(res.maxSpread[longId][shortId]) << "]";
+    *params.logFile << " [current_spread_range " << percToStr(spreadRange) << "]";
+    std::cout << "   " << btcLong->getExchName() << "/" << btcShort->getExchName() << ":\t" << percToStr(res.spreadOut);
+    std::cout << " [target " << percToStr(res.exitTarget) << ", min " << percToStr(res.minSpread[longId][shortId]) << ", max " << percToStr(res.maxSpread[longId][shortId]) << "]";
+    std::cout << " [current_spread_range " << percToStr(spreadRange) << "]";
     // The short-term volatility is computed and
     // displayed. No other action with it for
     // the moment.
@@ -159,15 +192,18 @@ bool checkExit(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& par
       if (res.volatility[longId][shortId].size() >= params.volatilityPeriod) {
         auto stdev = compute_sd(begin(res.volatility[longId][shortId]), end(res.volatility[longId][shortId]));
         *params.logFile << "  volat. " << stdev * 100.0 << "%";
+        std::cout << "  volat. " << stdev * 100.0 << "%";
       } else {
         *params.logFile << "  volat. n/a " << res.volatility[longId][shortId].size() << "<" << params.volatilityPeriod << " ";
       }
     }
-    if (res.trailing[longId][shortId] != 1.0) {
+    if (!equal(res.trailing[longId][shortId], TRAILING_MAX)) {
       *params.logFile << "   trailing " << percToStr(res.trailing[longId][shortId]) << "  " << res.trailingWaitCount[longId][shortId] << "/" << params.trailingCount;
+      std::cout << "   trailing " << percToStr(res.trailing[longId][shortId]) << "  " << res.trailingWaitCount[longId][shortId] << "/" << params.trailingCount;
     }
   }
   *params.logFile << std::endl;
+  std::cout << std::endl;
   if (period - res.entryTime >= int(params.maxLength)) {
     res.priceLongOut  = priceLong;
     res.priceShortOut = priceShort;
@@ -175,13 +211,13 @@ bool checkExit(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& par
   }
   if (res.spreadOut == 0.0) return false;
   if (res.spreadOut > res.exitTarget) {
-    res.trailing[longId][shortId] = 1.0;
+    res.trailing[longId][shortId] = TRAILING_MAX;
     res.trailingWaitCount[longId][shortId] = 0;
     return false;
   }
 
   double newTrailValue = res.spreadOut + params.trailingLim;
-  if (res.trailing[longId][shortId] == 1.0) {
+  if (equal(res.trailing[longId][shortId], TRAILING_MAX)) {
     res.trailing[longId][shortId] = std::min(newTrailValue, res.exitTarget);
     return false;
   }

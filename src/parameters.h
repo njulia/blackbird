@@ -1,6 +1,7 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
+#include "indicator.h"
 #include "unique_sqlite.hpp"
 
 #include <fstream>
@@ -11,6 +12,8 @@
 // Stores all the parameters defined
 // in the configuration file.
 struct Parameters {
+  Indicators *m_pbtc;
+  Indicators *m_peth;
   
   std::vector<std::string> exchName;
   std::vector<double> fees;
@@ -76,6 +79,7 @@ struct Parameters {
   bool poloniexEnable;
   std::string gdaxApi;
   std::string gdaxSecret;
+  std::string gdaxPhrase;
   double gdaxFees;
   bool gdaxEnable;
   std::string quadrigaApi;
@@ -99,6 +103,7 @@ struct Parameters {
   unique_sqlite dbConn;
 
   Parameters(std::string fileName);
+  ~Parameters();
 
   void addExchange(std::string n, double f, bool h, bool m);
 

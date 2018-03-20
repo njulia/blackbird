@@ -64,12 +64,26 @@ static std::string findConfigFile(std::string fileName) {
   return fileName;
 }
 
-Parameters::Parameters(std::string fileName) {
+Parameters::~Parameters()
+{
+    std::cout << "Parameters destructor" << std::endl;
+    delete m_pbtc;
+    delete m_peth;
+}
+
+Parameters::Parameters(std::string fileName) 
+           :m_pbtc(NULL),
+            m_peth(NULL)
+{
+  std::cout << "Parameters constructor" << std::endl;
   std::ifstream configFile(findConfigFile(fileName));
   if (!configFile.is_open()) {
     std::cout << "ERROR: " << fileName << " cannot be open.\n";
     exit(EXIT_FAILURE);
   }
+ 
+  m_pbtc = new Indicators();
+  m_peth = new Indicators(); 
 
   spreadEntry = getDouble(getParameter("SpreadEntry", configFile));
   spreadTarget = getDouble(getParameter("SpreadTarget", configFile));
@@ -126,6 +140,7 @@ Parameters::Parameters(std::string fileName) {
   poloniexEnable = getBool(getParameter("PoloniexEnable", configFile));
   gdaxApi = getParameter("GDAXApiKey", configFile);
   gdaxSecret = getParameter("GDAXSecretKey", configFile);
+  gdaxPhrase = getParameter("GDAXPhrase", configFile);
   gdaxFees = getDouble(getParameter("GDAXFees", configFile));
   gdaxEnable = getBool(getParameter("GDAXEnable", configFile));
   quadrigaApi = getParameter("QuadrigaApiKey", configFile);
