@@ -2,6 +2,17 @@
 #define INDICATOR_H
 
 #include <vector>
+#include <array>
+
+struct Parameters;
+
+using std::string;
+using std::array;
+
+typedef double (*getAvailType) (Parameters& params, std::string currency);
+typedef std::string (*sendLimitOrderType) (Parameters& params, std::string direction, double quantity, double price, const std::string& ccy_pair);
+typedef bool (*isOrderCompleteType) (Parameters& params, std::string orderId);
+typedef bool (*getOrderbookType) (Parameters& params, const std::string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size);
 
 struct Indicator
 {
@@ -42,6 +53,10 @@ private:
    double m_macd_signal;
    double m_macd_hist;
 };
+
+bool triangular(Parameters& params, const array<array<string, 3>, 10>& ccys, const string& base_ccy, getAvailType getAvail, getOrderbookType getOrderbook, sendLimitOrderType sendLimitOrder, isOrderCompleteType isOrderComplete);
+
+double trim(double input, unsigned int decimal=8);
 
 #endif
 

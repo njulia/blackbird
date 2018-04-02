@@ -9,6 +9,10 @@
 #include <iomanip>
 #include <vector>
 #include <array>
+//#include <ctime>
+//#include <cmath>
+//#include <algorithm>
+//#include <chrono>
 
 using std::string;
 using std::cout;
@@ -20,29 +24,14 @@ using std::max;
 
 namespace GDAX
 {
-/*
     std::array<string, 3> ccys0 = {"BTC-EUR", "ETH-BTC", "ETH-EUR"};
     std::array<string, 3> ccys1 = {"BTC-EUR", "LTC-BTC", "LTC-EUR"};
     std::array<string, 3> ccys2 = {"BTC-EUR", "BCH-BTC", "BCH-EUR"};
-    std::array<std::array<string, 3>, 10> ccys = {ccys0, ccys1, ccys2};
+    std::array<std::array<string, 3>, 5> ccys = {ccys0, ccys1, ccys2};
+/*
+    std::array<std::array<string, 3>, 5> ccys =
+                  {{"BTC-EUR", "ETH-BTC", "ETH-EUR"}, {"BTC-EUR", "LTC-BTC", "LTC-EUR"}, {"BTC-EUR", "BCH-BTC", "BCH-EUR"}};
 */
-std::array<std::array<string, 3>, 10> CCYS_USD = 
-{
-  {
-  {"BTC-USD", "ETH-BTC", "ETH-USD"},
-  {"BTC-USD", "LTC-BTC", "LTC-USD"}, 
-  {"BTC-USD", "BCH-BTC", "BCH-USD"}
-  }
-};
-std::array<std::array<string, 3>, 10> CCYS_EUR = 
-{
-  {
-  {"BTC-EUR", "ETH-BTC", "ETH-EUR"},
-  {"BTC-EUR", "LTC-BTC", "LTC-EUR"}, 
-  {"BTC-EUR", "BCH-BTC", "BCH-EUR"}
-  }
-};
-
 static RestApi &queryHandle(Parameters &params)
 {
   static RestApi query("https://api.gdax.com",
@@ -71,18 +60,12 @@ quote_t getQuote(Parameters &params)
   //arbitrage(params);
   //macd(params);
 
-  triangular(params, CCYS_USD, "USD", getAvail, getOrderbook, sendLimitOrder, isOrderComplete);
-  triangular(params, CCYS_EUR, "EUR", getAvail, getOrderbook, sendLimitOrder, isOrderComplete);
+  arbitrage(params, ccys, "EUR", getAvail, getOrderbook, sendLimitOrder, isOrderComplete);
   return std::make_pair(std::stod(bid), std::stod(ask));
 }
 
 double getAvail(Parameters &params, std::string currency)
 {
-  if (currency.compare("usd") == 0 || currency.compare("USD") == 0)
-  {
-      currency = "EUR";
-      *params.logFile << "Change Currency from USD to EUR" << std::endl;
-  }
   unique_json root{authRequest(params, "GET", "/accounts", "")};
   json_t *message  = json_object_get(root.get(), "message");
   if (message != NULL)
@@ -325,17 +308,14 @@ void testGDAX()
 
 bool getOrderbook(Parameters& params, const string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size)
 {
-  if (ccy_pair.empty())
-      return false;
   auto &exchange = queryHandle(params);
-  const string url = "/products/" + ccy_pair + "/book?level=1";
+  const string& url = "/products/" + ccy_pair + "/book?level=1";
   unique_json root { exchange.getRequest(url) };
   json_t *bids = json_object_get(root.get(), "bids");
   json_t *asks = json_object_get(root.get(), "asks");
   if ( !json_is_array(bids) || !json_is_array(asks) )
   {
-    cout << "GDAX OrderBook Bids or Asks is not array: " << ccy_pair << endl;
-    *params.logFile << "GDAX OrderBook Bids or Asks is not array: " << ccy_pair << endl;
+    cout << "OrderBook Bids or Asks is not array" << endl;
     return false;
   }  
   // Get the top bid and ask in the order book 
@@ -343,8 +323,7 @@ bool getOrderbook(Parameters& params, const string& ccy_pair, double& bid_price,
   json_t *ask = json_array_get(asks, 0);
   if ( !json_is_array(bid) || !json_is_array(ask) )
   {
-    cout << "GDAX OrderBook top Bid or Ask is not array: " << ccy_pair << endl;
-    *params.logFile << "GDAX OrderBook top Bid or Ask is not array: " << ccy_pair << endl;
+    cout << "OrderBook top Bid or Ask is not array" << endl;
     return false;
   }  
   const char *bid_price_str = json_string_value(json_array_get(bid, 0));
@@ -357,11 +336,218 @@ bool getOrderbook(Parameters& params, const string& ccy_pair, double& bid_price,
   ask_price = ask_price_str ? atof(ask_price_str) : 0.0;
   ask_size = ask_size_str ? atof(ask_size_str) : 0.0;
 
-  //cout << std::setprecision(8) << "GDAX  " << url  << " : " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << endl;
-  *params.logFile << std::setprecision(8) << "GDAX  " << url  << "  : " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << endl;
+  //cout << "GDAX  " << url  << " : " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << endl;
+  *params.logFile << "GDAX  " << url  << "  : " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << endl;
   return true;
 
 } 
+
+/*
+bool arbitrage(Parameters& params)
+{
+  float min_balance = 1000.0;
+  double cur_balance = getAvail(params, "EUR");
+  //if (cur_balance < min_balance)
+      //return false;
+  
+for (int i=0; i<3; ++i)
+{
+  const string ccy1 = ccys[i][0];
+  const string ccy2 = ccys[i][1];
+  const string ccy3 = ccys[i][2];
+  cout << "ccy1=" << ccy1 << " ccy2=" << ccy2 << " ccy3=" << ccy3 << endl;
+  *params.logFile << "ccy1=" << ccy1 << " ccy2=" << ccy2 << " ccy3=" << ccy3 << endl;
+
+  // BTC-EUR
+  //string ccy_pair = "BTC-EUR";
+  double btcusd_bid_price, btcusd_bid_size, btcusd_ask_price, btcusd_ask_size;
+  if (!getOrderbook(params, ccy1, btcusd_bid_price, btcusd_bid_size, btcusd_ask_price, btcusd_ask_size))
+      continue; 
+  // ETH-BTC
+  //ccy_pair = "ETH-BTC";
+  double ethbtc_bid_price, ethbtc_bid_size, ethbtc_ask_price, ethbtc_ask_size;
+  if (!getOrderbook(params, ccy2, ethbtc_bid_price, ethbtc_bid_size, ethbtc_ask_price, ethbtc_ask_size))
+      continue; 
+  // ETH/USD
+  //ccy_pair = "ETH-EUR";
+  double ethusd_bid_price, ethusd_bid_size, ethusd_ask_price, ethusd_ask_size;
+  if (!getOrderbook(params, ccy3, ethusd_bid_price, ethusd_bid_size, ethusd_ask_price, ethusd_ask_size))
+      continue; 
+
+  float fees = params.gdaxFees;
+  static float account = 1000.0;
+  float potential_pnl = account / btcusd_ask_price / ethbtc_ask_price * ethusd_bid_price - 3*fees*account - account;
+  cout << "Potential buy " << ccy1 << " -> sell " << ccy3 << " PNL=" << potential_pnl << endl;
+  *params.logFile << "Potential buy " << ccy1 << " -> sell " << ccy3 << " PNL=" << potential_pnl << endl;
+  // Arbitrage when there is profilt
+  if (potential_pnl > account * 0.001)
+  {
+    account += potential_pnl;
+    cout << "GDAX Opportunity: buy " << ccy1 << " -> sell " << ccy3 << " PNL=" << potential_pnl << " Account=" << account << endl;
+    *params.logFile << "GDAX Opportunity: buy " << ccy1 << " -> sell " << ccy3 << " PNL=" << potential_pnl << " Account=" << account << endl;
+
+    if (cur_balance < min_balance)
+      return false;
+    // Check the maximum fund can be used for arbitrage. Should be less than the top order book, and less than the account balance
+    double buy_power  = min(min(min(btcusd_ask_size*btcusd_ask_price, ethbtc_ask_size*ethbtc_ask_price), ethusd_bid_size*ethusd_bid_price), cur_balance); //Only use 90% fund 
+   
+    // Buy BTC-EUR order
+    double ticksize = 0.01;
+    double btcusd_size = trim(min(buy_power / btcusd_ask_price, btcusd_ask_size)); // Mutipled buy a factor (<1) to buy less than the max fund can be used
+    double btcusd_price = btcusd_ask_price;
+    //double btcusd_price = min((btcusd_bid_price + btcusd_ask_price)/2 + ticksize, btcusd_ask_price - ticksize);
+    auto btcusd_id = sendLimitOrder(params, "buy", btcusd_size, btcusd_price, ccy1); 
+    sleep_for(millisecs(1000));
+    bool is_order_complete = isOrderComplete(params, btcusd_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy " << ccy1 << " : " << btcusd_price << " @ " << btcusd_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, btcusd_id);
+    }
+    // Reset the order id
+    btcusd_id ="0";
+    cout << "Buy " << ccy1 << " Done" << endl;
+    *params.logFile << "Buy " << ccy1 << " Done" << endl;
+    
+    // Buy ETH-BTC order
+    ticksize = 0.00001;
+    double ethbtc_size = trim(btcusd_size / ethbtc_ask_price);
+    double ethbtc_price = ethbtc_ask_price;
+    //double ethbtc_price = max(ethbtc_ask_price-ticksize, ethbtc_bid_price);
+    auto ethbtc_id = sendLimitOrder(params, "buy", ethbtc_size, ethbtc_price, ccy2); 
+    sleep_for(millisecs(1000));
+    is_order_complete = isOrderComplete(params, ethbtc_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy " << ccy2 << " : " << ethbtc_price << " @ " << ethbtc_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, ethbtc_id);
+    }
+    // Reset the order id
+    ethbtc_id ="0";
+    cout << "Buy " << ccy2 << " Done" << endl;
+    *params.logFile << "Buy " << ccy2 << " Done" << endl;
+
+    // Sell ETH-EUR order
+    ticksize = 0.01;
+    //double ethusd_size = min(ethbtc_size, ethusd_bid_size); // Mutipled buy a factor (<1) to buy less than the max fund can be used
+    //double ethusd_price = max((ethusd_bid_price + ethusd_ask_price)/2 - ticksize, ethusd_bid_price + ticksize);
+    double ethusd_size = ethbtc_size;
+    double ethusd_price = ethusd_bid_price;
+    //double ethusd_price = min(ethusd_bid_price+ticksize, ethusd_ask_price);
+    auto ethusd_id = sendLimitOrder(params, "sell", ethusd_size, ethusd_price, ccy3); 
+    sleep_for(millisecs(1000));
+    is_order_complete = isOrderComplete(params, ethusd_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Sell " << ccy3 << " : " << ethusd_price << " @ " << ethusd_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, ethusd_id);
+    }
+    // Reset the order id
+    ethusd_id ="0";
+    cout << "Sell " << ccy3 << " Done" << endl;
+    *params.logFile << "Sell " << ccy3 << " Done" << endl;
+
+    // Check the pnl of this arbitrage
+    double new_balance = getAvail(params, "EUR");
+    double pnl = new_balance - cur_balance;;
+    account += pnl;
+    std::cout << "GDAX buy " << ccy1 << " -> buy " << ccy2 << " -> sell " << ccy3 << " PNL=" << pnl << " New balance=e" << new_balance << std::endl;
+    *params.logFile << "GDAX buy " << ccy1 << " -> buy " << ccy2 << " -> sell " << ccy3 << " PNL=" << pnl << " New balance=e" << new_balance << std::endl;
+    return true;
+  }
+  else
+  {
+    potential_pnl = account / ethusd_ask_price * ethbtc_bid_price * btcusd_bid_price - 3*fees*account - account;
+    cout << "Potential buy " << ccy3 <<  " -> sell " << ccy1 << " PNL=" << potential_pnl << endl;
+    *params.logFile << "Potential buy " << ccy3 <<  " -> sell " << ccy1 << " PNL=" << potential_pnl << endl;
+    if (potential_pnl > account * 0.0001)
+    {
+    account += potential_pnl;
+    cout << "GDAX Opportunity: buy " << ccy3 << " -> sell " << ccy1 << " PNL=" << potential_pnl << " Account=" << account << endl;
+    *params.logFile << "GDAX Opportunity: buy " << ccy3 << " -> sell " << ccy1 << " PNL=" << potential_pnl << " Account=" << account << endl;
+    double cur_balance = getAvail(params, "EUR");
+    if (cur_balance < min_balance)
+    {
+      cout << "Balance " << cur_balance << " < " << account << endl;
+      return false;
+    }
+    // Check the maximum fund can be used for arbitrage. Should be less than the top order book, and less than the account balance
+    double buy_power  = min(min(min(ethusd_ask_size*ethusd_ask_price, ethbtc_bid_size*ethbtc_bid_price), btcusd_bid_size*btcusd_bid_price), cur_balance); //Only use 90% fund 
+
+    // Buy ETH-EUR order
+    double ticksize = 0.01;
+    double ethusd_size = trim(min(buy_power/ethusd_ask_price, ethusd_ask_size)); // Mutipled buy a factor (<1) to buy less than the max fund can be used
+    double ethusd_price = ethusd_ask_price;
+    //double ethusd_price = min((ethusd_bid_price + ethusd_ask_price)/2 + ticksize, ethusd_ask_price - ticksize);
+    auto ethusd_id = sendLimitOrder(params, "buy", ethusd_size, ethusd_price, ccy3); 
+    sleep_for(millisecs(1000));
+    bool is_order_complete = isOrderComplete(params, ethusd_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy " << ccy3 << " : " << ethusd_price << " @ " << ethusd_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, ethusd_id);
+    }
+    // Reset the order id
+    ethusd_id ="0";
+    cout << "Buy " << ccy3 << " Done" << endl;
+    *params.logFile << "Buy " << ccy3 << " Done" << endl;
+
+    // Sell ETH-BTC order
+    ticksize = 0.00001;
+    double ethbtc_size = ethusd_size;
+    double ethbtc_price = ethbtc_bid_price;
+    //double ethbtc_price = min(ethbtc_bid_price+ticksize, ethbtc_ask_price);
+    auto ethbtc_id = sendLimitOrder(params, "sell", ethbtc_size, ethbtc_price, ccy2); 
+    sleep_for(millisecs(1000));
+    is_order_complete = isOrderComplete(params, ethbtc_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Sell " << ccy2 << " : " << ethbtc_price << " @ " << ethbtc_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, ethbtc_id);
+    }
+    // Reset the order id
+    ethbtc_id ="0";
+    cout << "Sell " << ccy2 << " Done" << endl;
+    *params.logFile << "Sell " << ccy2 << " Done" << endl;
+    
+    // Sell BTC-EUR order
+    ticksize = 0.01;
+    double btcusd_size = ethbtc_size;
+    double btcusd_price = ethusd_bid_price;
+    //double btcusd_price = min(ethusd_bid_price+ticksize, ethusd_ask_price);
+    auto btcusd_id = sendLimitOrder(params, "sell", btcusd_size, btcusd_price, ccy1); 
+    sleep_for(millisecs(1000));
+    is_order_complete = isOrderComplete(params, btcusd_id);
+    while (!is_order_complete)
+    {
+      sleep_for(millisecs(1000));
+      cout << "Buy " << ccy1 << " : "  << btcusd_price << " @ " << btcusd_size << " still open..." << endl;
+      is_order_complete = isOrderComplete(params, btcusd_id);
+    }
+    // Reset the order id
+    btcusd_id ="0";
+    cout << "Sell " << ccy1 << " Done" << endl;
+    *params.logFile << "Sell " << ccy1 << " Done" << endl;
+    
+
+    // Check the pnl of this arbitrage
+    double new_balance = getAvail(params, "EUR");
+    double pnl = new_balance - cur_balance;;
+    account += pnl;
+    std::cout << "GDAX Buy " << ccy3 << " -> sell " << ccy2 << " -> sell " << ccy1 << " PNL=" << pnl << " New balance=e" << new_balance << std::endl;
+    *params.logFile << "GDAX Buy " << ccy3 << " -> sell " << ccy2 << " -> sell " << ccy1 << " PNL=" << pnl << " New balance=e" << new_balance << std::endl;
+    }
+  }
+}//for loop i
+  return false;
+}
+*/
+
 
 bool macd(Parameters& params)
 {
@@ -478,5 +664,11 @@ bool macd(Parameters& params)
   }
   return false;
 }
+/*
+double trim(double input, unsigned int decimal)
+{
+  return std::trunc(1e8 * input) / 1e8;
 
+}
+*/
 }

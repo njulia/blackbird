@@ -150,8 +150,8 @@ bool checkEntry(Bitcoin* btcLong, Bitcoin* btcShort, Result& res, Parameters& pa
   // was found).
   res.idExchLong = longId;
   res.idExchShort = shortId;
-  //res.feesLong = btcLong->getFees();
-  //res.feesShort = btcShort->getFees();
+  res.feesLong = btcLong->getFees();
+  res.feesShort = btcShort->getFees();
   res.exchNameLong = btcLong->getExchName();
   res.exchNameShort = btcShort->getExchName();
   res.priceLongIn = priceLong;

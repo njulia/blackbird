@@ -16,6 +16,10 @@
 #include "exchanges/poloniex.h"
 #include "exchanges/gdax.h"
 #include "exchanges/exmo.h"
+#include "exchanges/wex.h"
+#include "exchanges/cexio.h"
+#include "exchanges/bittrex.h"
+#include "exchanges/binance.h"
 #include "utils/send_email.h"
 #include "getpid.h"
 
@@ -36,9 +40,11 @@
 typedef quote_t (*getQuoteType) (Parameters& params);
 typedef double (*getAvailType) (Parameters& params, std::string currency);
 typedef std::string (*sendOrderType) (Parameters& params, std::string direction, double quantity, double price);
+typedef std::string (*sendLimitOrderType) (Parameters& params, std::string direction, double quantity, double price, const std::string& ccy_pair);
 typedef bool (*isOrderCompleteType) (Parameters& params, std::string orderId);
 typedef double (*getActivePosType) (Parameters& params);
 typedef double (*getLimitPriceType) (Parameters& params, double volume, bool isBid);
+typedef bool (*getOrderbookType) (Parameters& params, const std::string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size);
 
 
 // This structure contains the balance of both exchanges,
@@ -98,14 +104,14 @@ int main(int argc, char** argv) {
 
   // Function arrays containing all the exchanges functions
   // using the 'typedef' declarations from above.
-  getQuoteType getQuote[11];
-  getAvailType getAvail[11];
-  sendOrderType sendLongOrder[11];
-  sendOrderType sendShortOrder[11];
-  isOrderCompleteType isOrderComplete[11];
-  getActivePosType getActivePos[11];
-  getLimitPriceType getLimitPrice[11];
-  std::string dbTableName[11];
+  getQuoteType getQuote[14];
+  getAvailType getAvail[14];
+  sendOrderType sendLongOrder[14];
+  sendOrderType sendShortOrder[14];
+  isOrderCompleteType isOrderComplete[14];
+  getActivePosType getActivePos[14];
+  getLimitPriceType getLimitPrice[14];
+  std::string dbTableName[14];
 
   // Adds the exchange functions to the arrays for all the defined exchanges
   int index = 0;
@@ -179,6 +185,7 @@ int main(int argc, char** argv) {
     getQuote[index] = Kraken::getQuote;
     getAvail[index] = Kraken::getAvail;
     sendLongOrder[index] = Kraken::sendLongOrder;
+    sendShortOrder[index] = Kraken::sendShortOrder;
     isOrderComplete[index] = Kraken::isOrderComplete;
     getActivePos[index] = Kraken::getActivePos;
     getLimitPrice[index] = Kraken::getLimitPrice;
@@ -212,6 +219,21 @@ int main(int argc, char** argv) {
     getLimitPrice[index] = BTCe::getLimitPrice;
 
     dbTableName[index] = "btce";
+    createTable(dbTableName[index], params);
+
+    index++;
+  }
+  if (params.wexEnable &&
+     (params.wexApi.empty() == false || params.demoMode == true)) {
+    params.addExchange("WEX", params.wexFees, false, true);
+    getQuote[index] = WEX::getQuote;
+    getAvail[index] = WEX::getAvail;
+    sendLongOrder[index] = WEX::sendLongOrder;
+    isOrderComplete[index] = WEX::isOrderComplete;
+    getActivePos[index] = WEX::getActivePos;
+    getLimitPrice[index] = WEX::getLimitPrice;
+
+    dbTableName[index] = "wex";
     createTable(dbTableName[index], params);
 
     index++;
@@ -277,6 +299,55 @@ int main(int argc, char** argv) {
 
     index++;
   }
+  if (params.cexioEnable &&
+         (params.cexioApi.empty() == false || params.demoMode == true)) {
+    params.addExchange("Cexio", params.cexioFees, false, true);
+    getQuote[index] = Cexio::getQuote;
+    getAvail[index] = Cexio::getAvail;
+    sendLongOrder[index] = Cexio::sendLongOrder;
+    sendShortOrder[index] = Cexio::sendShortOrder;
+    isOrderComplete[index] = Cexio::isOrderComplete;
+    getActivePos[index] = Cexio::getActivePos;
+    getLimitPrice[index] = Cexio::getLimitPrice;
+
+    dbTableName[index] = "cexio";
+    createTable(dbTableName[index], params);
+
+    index++;
+  }
+  if (params.bittrexEnable &&
+      (params.bittrexApi.empty() == false || params.demoMode == true))
+  {
+    params.addExchange("Bittrex", params.bittrexFees, false, true);
+    getQuote[index] = Bittrex::getQuote;
+    getAvail[index] = Bittrex::getAvail;
+    sendLongOrder[index] = Bittrex::sendLongOrder;
+    sendShortOrder[index] = Bittrex::sendShortOrder;
+    isOrderComplete[index] = Bittrex::isOrderComplete;
+    getActivePos[index] = Bittrex::getActivePos;
+    getLimitPrice[index] = Bittrex::getLimitPrice;
+    dbTableName[index] = "bittrex";
+    createTable(dbTableName[index], params);
+
+    index++;
+  }
+  if (params.binanceEnable &&
+      (params.binanceApi.empty() == false || params.demoMode == true))
+  {
+    params.addExchange("Binance", params.binanceFees, false, true);
+    getQuote[index] = Binance::getQuote;
+    getAvail[index] = Binance::getAvail;
+    sendLongOrder[index] = Binance::sendLongOrder;
+    sendShortOrder[index] = Binance::sendShortOrder;
+    isOrderComplete[index] = Binance::isOrderComplete;
+    getActivePos[index] = Binance::getActivePos;
+    getLimitPrice[index] = Binance::getLimitPrice;
+    dbTableName[index] = "binance";
+    createTable(dbTableName[index], params);
+
+    index++;
+  }
+
   // We need at least two exchanges to run Blackbird
   if (index < 2) {
     std::cout << "ERROR: Blackbird needs at least two Bitcoin exchanges. Please edit the config.json file to add new exchanges\n" << std::endl;
@@ -378,8 +449,12 @@ int main(int argc, char** argv) {
                 << std::setprecision(8) << balance[i].leg1 << " " << params.leg1 << std::endl;
     }
     if (balance[i].leg1 > 0.0050 && !inMarket) { // FIXME: hard-coded number
+      if (params.exchName[i] != "Bitstamp" || params.exchName[i] != "OKCoin") // to be removed
+      { 
+      std::cout << "ERROR: All " << params.leg1 << " accounts must be empty before starting Blackbird" << std::endl;
       logFile << "ERROR: All " << params.leg1 << " accounts must be empty before starting Blackbird" << std::endl;
-      exit(EXIT_FAILURE);
+      //exit(EXIT_FAILURE);
+      }
     }
   }
   logFile << std::endl;

@@ -23,10 +23,11 @@ double getActivePos(Parameters& params);
 
 double getLimitPrice(Parameters& params, double volume, bool isBid);
 
-bool get_orderbook(Parameters& params, const std::string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size);
+bool getOrderbook(Parameters& params, const std::string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size);
 
 bool arbitrage(Parameters& params);
 
+double trim(double input, unsigned int decimal=8);
 }
 
 #endif

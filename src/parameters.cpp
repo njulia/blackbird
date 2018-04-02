@@ -134,6 +134,10 @@ Parameters::Parameters(std::string fileName)
   btceSecret = getParameter("BTCeSecretKey", configFile);
   btceFees = getDouble(getParameter("BTCeFees", configFile));
   btceEnable = getBool(getParameter("BTCeEnable", configFile));
+  wexApi = getParameter("WEXApiKey", configFile);
+  wexSecret = getParameter("WEXSecretKey", configFile);
+  wexFees = getDouble(getParameter("WEXFees", configFile));
+  wexEnable = getBool(getParameter("WEXEnable", configFile));
   poloniexApi = getParameter("PoloniexApiKey", configFile);
   poloniexSecret = getParameter("PoloniexSecretKey", configFile);
   poloniexFees = getDouble(getParameter("PoloniexFees", configFile));
@@ -152,6 +156,19 @@ Parameters::Parameters(std::string fileName)
   exmoSecret = getParameter("ExmoSecretKey", configFile);
   exmoFees = getDouble(getParameter("ExmoFees", configFile));
   exmoEnable = getBool(getParameter("ExmoEnable", configFile));
+  cexioClientId = getParameter("CexioClientId", configFile);
+  cexioApi = getParameter("CexioApiKey", configFile);
+  cexioSecret = getParameter("CexioSecretKey", configFile);
+  cexioFees = getDouble(getParameter("CexioFees", configFile));
+  cexioEnable = getBool(getParameter("CexioEnable", configFile));
+  bittrexApi = getParameter("BittrexApiKey", configFile);
+  bittrexSecret = getParameter("BittrexSecretKey", configFile);
+  bittrexFees = getDouble(getParameter("BittrexFees", configFile));
+  bittrexEnable = getBool(getParameter("BittrexEnable", configFile));
+  binanceApi = getParameter("BinanceApiKey", configFile);
+  binanceSecret = getParameter("BinanceSecretKey", configFile);
+  binanceFees = getDouble(getParameter("BinanceFees", configFile));
+  binanceEnable = getBool(getParameter("BinanceEnable", configFile));
 
   sendEmail = getBool(getParameter("SendEmail", configFile));
   senderAddress = getParameter("SenderAddress", configFile);

@@ -31,6 +31,10 @@ void testGDAX();
 
 bool getOrderbook(Parameters& params, const std::string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size);
 
+//bool arbitrage(Parameters& params);
+
+//double trim(double input, unsigned int decimal=8);
+
 bool macd(Parameters& params);
 
 }

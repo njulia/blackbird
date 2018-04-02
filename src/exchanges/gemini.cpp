@@ -15,6 +15,12 @@
 #include <ctime>
 
 namespace Gemini {
+std::array<std::array<string, 3>, 10> CCYS_USD = 
+{
+  {
+  {"btcusd", "ethbtc", "ethusd"},
+  }
+};
 
 static RestApi& queryHandle(Parameters &params)
 {
@@ -35,6 +41,8 @@ quote_t getQuote(Parameters &params)
 
   quote = json_string_value(json_object_get(json_array_get(json_object_get(root.get(), "asks"), 0), "price"));
   auto askValue = quote ? std::stod(quote) : 0.0;
+  
+  triangular(params, CCYS_USD, "usd", getAvail, getOrderbook, sendLimitOrder, isOrderComplete);
 
   return std::make_pair(bidValue, askValue);
 }
@@ -203,6 +211,65 @@ json_t* authRequest(Parameters& params, std::string url, std::string request, st
     *params.logFile << "<Gemini> Error with cURL init." << std::endl;
     return NULL;
   }
+}
+
+bool getOrderbook(Parameters& params, const string& ccy_pair, double& bid_price, double& bid_size, double& ask_price, double& ask_size)
+{
+  auto &exchange = queryHandle(params);
+  const string url = "/v1/book/" + ccy_pair;
+  unique_json root { exchange.getRequest(url) };
+  json_t *bids = json_object_get(root.get(), "bids");
+  json_t *asks = json_object_get(root.get(), "asks");
+  if (!json_is_array(bids) || !json_is_array(asks))
+  {
+      std::cout << "Gemini Orderbook Bids or Asks is not array: " << ccy_pair <<std::endl;
+      *params.logFile << "Gemini Orderbook Bids or Asks is not array: " << ccy_pair <<std::endl;
+      return false;
+  }
+  // Get the top bid and ask in the order book
+  json_t *bid = json_array_get(bids, 0);
+  json_t *ask = json_array_get(asks, 0);
+/*
+  if (!json_is_array(bid) || !json_is_array(ask))
+  {
+      std::cout << "Gemini Orderbook top Bid or Ask is not array: " << ccy_pair << std::endl; 
+      *params.logFile << "Gemini Orderbook top Bid or Ask is not array: " << ccy_pair << std::endl; 
+      return false;
+  }
+  */ 
+  const char *bid_price_str = json_string_value(json_object_get(bid, "price"));
+  const char *bid_size_str = json_string_value(json_object_get(bid, "amount"));
+  const char *ask_price_str = json_string_value(json_object_get(ask, "price"));
+  const char *ask_size_str = json_string_value(json_object_get(ask, "amount"));
+
+  bid_price = bid_price_str ? atof(bid_price_str) : 0.0; 
+  bid_size = bid_size_str ? atof(bid_size_str) : 0.0;
+  ask_price = ask_price_str ? atof(ask_price_str) : 0.0;
+  ask_size = ask_size_str ? atof(ask_size_str) : 0.0;
+
+  //std::cout << std::setprecision(8) << "Gemini " << url  << " : " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << std::endl;
+  *params.logFile << std::setprecision(8) << "Gemini " << url  << "  : " << bid_price << " x " << bid_size << " : " << ask_price << " x " << ask_size << std::endl;
+  return true;
+}
+
+std::string sendLimitOrder(Parameters &params, std::string direction, double quantity, double price, const string& ccy_pair)
+{
+  *params.logFile << "<Gemini> Trying to send a \"" << direction << "\" limit order: "
+                  << ccy_pair << " - "
+                  << std::setprecision(8) << quantity << "@$"
+                  << std::setprecision(8) << price << "...\n";
+  std::cout << "<Gemini> Trying to send a \"" << direction << "\" limit order: "
+                  << ccy_pair << " - "
+                  << std::setprecision(8) << quantity << "@$"
+                  << std::setprecision(8) << price << "...\n";
+  std::ostringstream oss;
+  oss << "\"symbol\":\"" << ccy_pair << "\", \"amount\":\"" << quantity << "\", \"price\":\"" << price << "\", \"side\":\"" << direction << "\", \"type\":\"exchange limit\"";
+  std::string options = oss.str();
+  unique_json root { authRequest(params, "https://api.gemini.com/v1/order/new", "order/new", options) };
+  std::string orderId = json_string_value(json_object_get(root.get(), "order_id"));
+  *params.logFile << "<Gemini> Done (order ID: " << orderId << ")\n" << std::endl;
+  std::cout << "<Gemini> Done (order ID: " << orderId << ")\n" << std::endl;
+  return orderId;
 }
 
 }

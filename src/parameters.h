@@ -73,6 +73,10 @@ struct Parameters {
   std::string btceSecret;
   double btceFees;
   bool btceEnable;
+  std::string wexApi;
+  std::string wexSecret;
+  double wexFees;
+  bool wexEnable;
   std::string poloniexApi;
   std::string poloniexSecret;
   double poloniexFees;
@@ -91,6 +95,19 @@ struct Parameters {
   std::string exmoSecret;
   double exmoFees;
   bool exmoEnable;
+  std::string cexioClientId;
+  std::string cexioApi;
+  std::string cexioSecret;
+  double cexioFees;
+  bool cexioEnable;
+  std::string bittrexApi;
+  std::string bittrexSecret;
+  double bittrexFees;
+  bool bittrexEnable;
+  std::string binanceApi;
+  std::string binanceSecret;
+  double binanceFees;
+  bool binanceEnable;
 
   bool sendEmail;
   std::string senderAddress;
